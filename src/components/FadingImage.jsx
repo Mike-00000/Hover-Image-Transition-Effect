@@ -1,15 +1,14 @@
 import { shaderMaterial, useTexture } from "@react-three/drei";
 import { extend, useFrame } from "@react-three/fiber";
-import { easing, geometry } from "maath";
+import { easing } from "maath";
 import { useRef, useState } from "react";
 
-export const ImageFadeMaterialDisplacement = shaderMaterial(
+export const ImageFadeMaterial = shaderMaterial(
   {
     effectFactor: 1.2,
     dispFactor: 0,
     tex: undefined,
     tex2: undefined,
-    disp: undefined,
   },
   /*glsl*/ `
     varying vec2 vUv;
@@ -21,15 +20,32 @@ export const ImageFadeMaterialDisplacement = shaderMaterial(
     varying vec2 vUv;
     uniform sampler2D tex;
     uniform sampler2D tex2;
-    uniform sampler2D disp;
     uniform float _rot;
     uniform float dispFactor;
     uniform float effectFactor;
+
+    float rand(vec2 n) { 
+      return fract(sin(dot(n, vec2(12.9898, 4.1414))) * 43758.5453);
+    }
+    
+    float noise(vec2 p){
+      vec2 ip = floor(p);
+      vec2 u = fract(p);
+      u = u*u*(3.0-2.0*u);
+      
+      float res = mix(
+        mix(rand(ip),rand(ip+vec2(1.0,0.0)),u.x),
+        mix(rand(ip+vec2(0.0,1.0)),rand(ip+vec2(1.0,1.0)),u.x),u.y);
+      return res*res;
+    }
+
     void main() {
       vec2 uv = vUv;
-      vec4 disp = texture2D(disp, uv);
-      vec2 distortedPosition = vec2(uv.x + dispFactor * (disp.r*effectFactor), uv.y);
-      vec2 distortedPosition2 = vec2(uv.x - (1.0 - dispFactor) * (disp.r*effectFactor), uv.y);
+
+      float noiseFactor = noise(gl_FragCoord.xy * 0.4);
+
+      vec2 distortedPosition = vec2(uv.x + dispFactor * noiseFactor, uv.y);
+      vec2 distortedPosition2 = vec2(uv.x - (1.0 - dispFactor) * noiseFactor, uv.y);
       vec4 _texture = texture2D(tex, distortedPosition);
       vec4 _texture2 = texture2D(tex2, distortedPosition2);
       vec4 finalTexture = mix(_texture, _texture2, dispFactor);
@@ -40,16 +56,14 @@ export const ImageFadeMaterialDisplacement = shaderMaterial(
 );
 
 extend({
-  ImageFadeMaterialDisplacement,
-  RoundedPlaneGeometry: geometry.RoundedPlaneGeometry,
+  ImageFadeMaterial,
 });
 
-export const FadingImageDisplacement = (props) => {
+export const FadingImage = (props) => {
   const ref = useRef();
-  const [texture1, texture2, dispTexture] = useTexture([
-    "/textures/portrait2.jpg",
-    "/textures/full_body2.jpg",
-    "/textures/displacement/11.jpg",
+  const [texture1, texture2] = useTexture([
+    "/textures/portrait.jpg",
+    "/textures/full_body.jpg",
   ]);
   const [hovered, setHover] = useState(false);
   useFrame((_state, delta) => {
@@ -64,11 +78,10 @@ export const FadingImageDisplacement = (props) => {
       <roundedPlaneGeometry
         args={[2.25, 4]} // 9:16 aspect ratio
       />
-      <imageFadeMaterialDisplacement
+      <imageFadeMaterial
         ref={ref}
         tex={texture1}
         tex2={texture2}
-        disp={dispTexture}
         toneMapped={false}
       />
     </mesh>
